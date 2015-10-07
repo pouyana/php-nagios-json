@@ -1,4 +1,5 @@
 <?php
+
 // statusJson.php
 //
 // Script to parse Nagios status.dat and present it as JSON, to allow inclusion
@@ -23,7 +24,7 @@
 // +----------------------------------------------------------------------+
 
 // Change this accordingly
-$statusFile = "/opt/local/var/nagios/status.dat";
+$statusFile = '/data/var-lib-nagios/status.dat';
 
 $nag_version = getFileVersion($statusFile);
 $created_ts = 0;
@@ -32,78 +33,90 @@ $debug = false;
 
 if ($nag_version == 4) {
     $data = getData4($statusFile);
-} else if ($nag_version == 3) {
+} elseif ($nag_version == 3) {
     $data = getData3($statusFile);
 } else {
     $data = getData2($statusFile);
 }
-
 $hosts = $data['hosts'];
 $services = $data['services'];
-$program = "";
-if (array_key_exists("program", $data)) {
+$comments = $data['comments'];
+$program = '';
+if (array_key_exists('program', $data)) {
     $program = $data['program'];
 }
 
-outputJson($hosts, $services, $program);
+outputJson($hosts, $services, $program, $comments);
 
-function outputJson($hosts, $services, $program)
+function outputJson($hosts, $services, $program, $comments)
 {
     // begin outputting XML
-    header("Content-type: application/json");
-    echo "{" . "\n";
+    header('Content-type: application/json');
+    echo '{'."\n";
 
     // program status
-    if ($program != "") {
-        echo '  "programStatus": {' . "\n";
+    if ($program != '') {
+        echo '  "programStatus": {'."\n";
         foreach ($program as $key => $val) {
-            echo '    "' . jsonString($key) . '": "' . jsonString($val) . '"' . (isLast($program, $key) ? '' : ',') . "\n";
+            echo '    "'.jsonString($key).'": "'.jsonString($val).'"'.(isLast($program, $key) ? '' : ',')."\n";
         }
         unset($key, $val);
-        echo '  },' . "\n";
+        echo '  },'."\n";
     }
+
+    //comments:
+    echo '  "comments": {'."\n";
+    foreach ($comments as $comment => $commentsArray) {
+        echo '   "'.jsonString($comment).'": {'."\n";
+        foreach ($commentsArray as $key => $val) {
+            echo '      "'.jsonString($key).'": "'.jsonString($val).'"'.(isLast($commentsArray, $key) ? '' : ',')."\n";
+        }
+        unset($key, $val);
+        echo '   }'.(isLast($comments, $comment) ? '' : ',')."\n";
+    }
+    unset($comments, $commentsArray);
+    echo '  },'."\n";
 
     // hosts
-    echo '  "hosts": {' . "\n";
+    echo '  "hosts": {'."\n";
     foreach ($hosts as $hostName => $hostArray) {
-        echo '   "' . jsonString($hostName) . '": {' . "\n";
+        echo '   "'.jsonString($hostName).'": {'."\n";
         foreach ($hostArray as $key => $val) {
-            echo '      "' . jsonString($key) . '": "' . jsonString($val) . '"' . (isLast($hostArray, $key) ? '' : ',') . "\n";
+            echo '      "'.jsonString($key).'": "'.jsonString($val).'"'.(isLast($hostArray, $key) ? '' : ',')."\n";
         }
         unset($key, $val);
-        echo '   }' . (isLast($hosts, $hostName) ? '' : ',') . "\n";
+        echo '   }'.(isLast($hosts, $hostName) ? '' : ',')."\n";
     }
     unset($hostName, $hostArray);
-    echo '  },' . "\n";
+    echo '  },'."\n";
 
     // loop through the services
-    echo '  "services": {' . "\n";
+    echo '  "services": {'."\n";
     foreach ($services as $hostName => $service) {
-        echo '   "' . jsonString($hostName) . '": {' . "\n";
+        echo '   "'.jsonString($hostName).'": {'."\n";
         foreach ($service as $serviceDesc => $serviceArray) {
-            echo '   "' . jsonString($serviceDesc) . '": {' . "\n";
+            echo '   "'.jsonString($serviceDesc).'": {'."\n";
             foreach ($serviceArray as $key => $val) {
-                echo '      "' . jsonString($key) . '": "' . jsonString($val) . '"' . (isLast($serviceArray, $key) ? '' : ',') . "\n";
+                echo '      "'.jsonString($key).'": "'.jsonString($val).'"'.(isLast($serviceArray, $key) ? '' : ',')."\n";
             }
             unset($key, $val);
-            echo '   }' . (isLast($service, $serviceDesc) ? '' : ',') . "\n";
+            echo '   }'.(isLast($service, $serviceDesc) ? '' : ',')."\n";
         }
-        echo '   }' . (isLast($services, $hostName) ? '' : ',') . "\n";
+        echo '   }'.(isLast($services, $hostName) ? '' : ',')."\n";
         unset($serviceDesc, $serviceArray);
     }
     unset($hostName, $service);
-    echo '  }' . "\n";
-    echo "}";
+    echo '  }'."\n";
+    echo '}';
 }
-
 
 // Determines if the given key is last in the given array
 function isLast($array, $key)
 {
     end($array);
+
     return ($key === key($array));
 }
-
 
 // replace reserved characters in json
 function jsonString($s)
@@ -111,11 +124,11 @@ function jsonString($s)
     $s = str_replace('\\', '\\\\', $s);
     $s = str_replace('"', '\"', $s);
     $s = str_replace("\t", '\t', $s);
-    $s = str_replace("\n", " ", $s);
-    $s = str_replace("\r", " ", $s);
+    $s = str_replace("\n", ' ', $s);
+    $s = str_replace("\r", ' ', $s);
+
     return $s;
 }
-
 
 // figure out what version the file is
 function getFileVersion($statusFile)
@@ -126,23 +139,23 @@ function getFileVersion($statusFile)
     $fh = fopen($statusFile, 'r');
     $inInfo = false;
     while ($line = fgets($fh)) {
-        if (trim($line) == "info {") {
+        if (trim($line) == 'info {') {
             $inInfo = true;
-        } elseif (trim($line) == "}") {
+        } elseif (trim($line) == '}') {
             $inInfo = false;
             break;
         } elseif ($inInfo) {
-            $vals = explode("=", $line);
-            if (trim($vals[0]) == "created") {
+            $vals = explode('=', $line);
+            if (trim($vals[0]) == 'created') {
                 $created = $vals[1];
-            } elseif (trim($vals[0]) == "version") {
+            } elseif (trim($vals[0]) == 'version') {
                 $version = substr($vals[1], 0, 1);
             }
         }
     }
+
     return $version;
 }
-
 
 // parse nagios2 status.dat
 function getData2($statusFile)
@@ -158,7 +171,7 @@ function getData2($statusFile)
 
     # variables to keep state
     $inSection = false;
-    $sectionType = "";
+    $sectionType = '';
     $lineNum = 0;
     $sectionData = array();
 
@@ -170,12 +183,12 @@ function getData2($statusFile)
 
     # loop through the file
     while ($line = fgets($fh)) {
-        $lineNum++; // increment counter of line number, mainly for debugging
+        ++$lineNum; // increment counter of line number, mainly for debugging
         $line = trim($line); // strip whitespace
-        if ($line == "") {
+        if ($line == '') {
             continue;
         } // ignore blank line
-        if (substr($line, 0, 1) == "#") {
+        if (substr($line, 0, 1) == '#') {
             continue;
         } // ignore comment
 
@@ -183,9 +196,10 @@ function getData2($statusFile)
 
         if (!$inSection) {
             // we're not currently in a section, but are looking to start one
-            if (strstr($line, " ") && (substr($line, -1) == "{")) // space and ending with {, so it's a section header
-            {
-                $sectionType = substr($line, 0, strpos($line, " ")); // first word on line is type
+            if (strstr($line, ' ') && (substr($line, -1) == '{')) {
+                // space and ending with {, so it's a section header
+
+                $sectionType = substr($line, 0, strpos($line, ' ')); // first word on line is type
                 $inSection = true;
                 // we're now in a section
                 $sectionData = array();
@@ -196,48 +210,46 @@ function getData2($statusFile)
                 } else {
                     $typeTotals[$sectionType] = 1;
                 }
-
             }
         }
 
-        if ($inSection && $line == "}") // closing a section
-        {
-            if ($sectionType == "service") {
+        if ($inSection && $line == '}') {
+            // closing a section
+
+            if ($sectionType == 'service') {
                 $serviceStatus[$sectionData['host_name']][$sectionData['service_description']] = $sectionData;
             }
-            if ($sectionType == "host") {
-                $hostStatus[$sectionData["host_name"]] = $sectionData;
+            if ($sectionType == 'host') {
+                $hostStatus[$sectionData['host_name']] = $sectionData;
             }
             $inSection = false;
-            $sectionType = "";
+            $sectionType = '';
             continue;
         } else {
             // we're currently in a section, and this line is part of it
-            $lineKey = substr($line, 0, strpos($line, "="));
-            $lineVal = substr($line, strpos($line, "=") + 1);
+            $lineKey = substr($line, 0, strpos($line, '='));
+            $lineVal = substr($line, strpos($line, '=') + 1);
 
             // add to the array as appropriate
-            if ($sectionType == "service") {
+            if ($sectionType == 'service') {
                 if (in_array($lineKey, $service_keys)) {
                     $sectionData[$lineKey] = $lineVal;
                 }
-            } elseif ($sectionType == "host") {
+            } elseif ($sectionType == 'host') {
                 if (in_array($lineKey, $host_keys)) {
                     $sectionData[$lineKey] = $lineVal;
                 }
             }
             // else continue on, ignore this section, don't save anything
         }
-
     }
 
     fclose($fh);
 
-    $retArray = array("hosts" => $hostStatus, "services" => $serviceStatus);
+    $retArray = array('hosts' => $hostStatus, 'services' => $serviceStatus);
 
     return $retArray;
 }
-
 
 // parse nagios3 status.dat
 function getData3($statusFile)
@@ -249,34 +261,36 @@ function getData3($statusFile)
 
     # variables to keep state
     $inSection = false;
-    $sectionType = "";
+    $sectionType = '';
     $lineNum = 0;
     $sectionData = array();
 
     $hostStatus = array();
     $serviceStatus = array();
     $programStatus = array();
+    $serviceComment = array();
 
     #variables for total hosts and services
     $typeTotals = array();
 
     # loop through the file
     while ($line = fgets($fh)) {
-        $lineNum++; // increment counter of line number, mainly for debugging
+        ++$lineNum; // increment counter of line number, mainly for debugging
         $line = trim($line); // strip whitespace
-        if ($line == "") {
+        if ($line == '') {
             continue;
         } // ignore blank line
-        if (substr($line, 0, 1) == "#") {
+        if (substr($line, 0, 1) == '#') {
             continue;
         } // ignore comment
 
         // ok, now we need to deal with the sections
         if (!$inSection) {
             // we're not currently in a section, but are looking to start one
-            if (substr($line, strlen($line) - 1, 1) == "{") // space and ending with {, so it's a section header
-            {
-                $sectionType = substr($line, 0, strpos($line, " ")); // first word on line is type
+            if (substr($line, strlen($line) - 1, 1) == '{') {
+                // space and ending with {, so it's a section header
+
+                $sectionType = substr($line, 0, strpos($line, ' ')); // first word on line is type
                 $inSection = true;
                 // we're now in a section
                 $sectionData = array();
@@ -287,43 +301,43 @@ function getData3($statusFile)
                 } else {
                     $typeTotals[$sectionType] = 1;
                 }
-
             }
-        } elseif ($inSection && trim($line) == "}") // closing a section
-        {
-            if ($sectionType == "servicestatus") {
+        } elseif ($inSection && trim($line) == '}') {
+            // closing a section
+
+            if ($sectionType == 'servicestatus') {
                 $serviceStatus[$sectionData['host_name']][$sectionData['service_description']] = $sectionData;
-            } elseif ($sectionType == "hoststatus") {
-                $hostStatus[$sectionData["host_name"]] = $sectionData;
-            } elseif ($sectionType == "programstatus") {
+            } elseif ($sectionType == 'hoststatus') {
+                $hostStatus[$sectionData['host_name']] = $sectionData;
+            } elseif ($sectionType == 'programstatus') {
                 $programStatus = $sectionData;
+            } elseif ($sectionType == 'servicecomment') {
+                $serviceComment[$sectionData['host_name']] = $sectionData;
             }
             $inSection = false;
-            $sectionType = "";
+            $sectionType = '';
             continue;
         } else {
             // we're currently in a section, and this line is part of it
-            $lineKey = substr($line, 0, strpos($line, "="));
-            $lineVal = substr($line, strpos($line, "=") + 1);
+            $lineKey = substr($line, 0, strpos($line, '='));
+            $lineVal = substr($line, strpos($line, '=') + 1);
 
             // add to the array as appropriate
-            if ($sectionType == "servicestatus" || $sectionType == "hoststatus" || $sectionType == "programstatus") {
+            if ($sectionType == 'servicestatus' || $sectionType == 'hoststatus' || $sectionType == 'programstatus' || $sectionType == 'servicecomment') {
                 if ($debug) {
-                    echo "LINE " . $lineNum . ": lineKey=" . $lineKey . "= lineVal=" . $lineVal . "=\n";
+                    echo 'LINE '.$lineNum.': lineKey='.$lineKey.'= lineVal='.$lineVal."=\n";
                 }
                 $sectionData[$lineKey] = $lineVal;
             }
             // else continue on, ignore this section, don't save anything
         }
-
     }
 
     fclose($fh);
+    $retArray = array('comments' => $serviceComment, 'hosts' => $hostStatus, 'services' => $serviceStatus, 'program' => $programStatus);
 
-    $retArray = array("hosts" => $hostStatus, "services" => $serviceStatus, "program" => $programStatus);
     return $retArray;
 }
-
 
 // parse nagios4 status.dat
 function getData4($statusFile)
@@ -335,23 +349,23 @@ function getData4($statusFile)
 // this formats the age of a check in seconds into a nice textual description
 function ageString($seconds)
 {
-    $age = "";
+    $age = '';
     if ($seconds > 86400) {
-        $days = (int)($seconds / 86400);
+        $days = (int) ($seconds / 86400);
         $seconds = $seconds - ($days * 86400);
-        $age .= $days . " days ";
+        $age .= $days.' days ';
     }
     if ($seconds > 3600) {
-        $hours = (int)($seconds / 3600);
+        $hours = (int) ($seconds / 3600);
         $seconds = $seconds - ($hours * 3600);
-        $age .= $hours . " hours ";
+        $age .= $hours.' hours ';
     }
     if ($seconds > 60) {
-        $minutes = (int)($seconds / 60);
+        $minutes = (int) ($seconds / 60);
         $seconds = $seconds - ($minutes * 60);
-        $age .= $minutes . " minutes ";
+        $age .= $minutes.' minutes ';
     }
-    $age .= $seconds . " seconds ";
+    $age .= $seconds.' seconds ';
+
     return $age;
 }
-?>
